@@ -1,5 +1,19 @@
+module "global" {
+  source = "../global"
+}
+
 provider "aws" {
-    region = "${var.aws_region}"
+    region = "${module.global.region}"
+}
+
+terraform {
+  backend "s3" {
+    bucket          = "lambda-demo-terraform-state"
+    key             = "global/s3/terraform.tfstate"
+    encrypt         = "true"
+    dynamodb_table  = "lambda-demo-terraform-state-lock"
+    region = "us-west-1"
+  }
 }
 
 resource "aws_lambda_function" "lambda_demo" {
@@ -40,16 +54,8 @@ data "aws_ssm_parameter" "secret_read" {
   name  = "TEST_SECRET"
 }
 
-output "secret_read" {
-  value = "${data.aws_ssm_parameter.secret_read.value}"
-}
-
 resource "aws_ssm_parameter" "secret_write" {
-  name  = "/${var.environment}/secret/test"
+  name  = "/${module.global.environment}/secret/test"
   type  = "SecureString"
   value = "This is another secret"
-}
-
-output "secret_write" {
-  value = "${aws_ssm_parameter.secret_write.value}"
 }
