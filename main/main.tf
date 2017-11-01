@@ -1,12 +1,7 @@
-module "global" {
-  source = "../global"
-}
-
-provider "aws" {
-    region = "${module.global.region}"
-}
-
+// Can not use variables
+// terraform.backend: configuration cannot contain interpolations
 terraform {
+  required_version = ">= 0.10.0"
   backend "s3" {
     bucket          = "lambda-demo-terraform-state"
     key             = "global/s3/terraform.tfstate"
@@ -14,6 +9,14 @@ terraform {
     dynamodb_table  = "lambda-demo-terraform-state-lock"
     region = "us-west-1"
   }
+}
+
+module "global" {
+  source = "../global"
+}
+
+provider "aws" {
+    region = "${module.global.region}"
 }
 
 resource "aws_lambda_function" "lambda_demo" {
