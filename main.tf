@@ -36,8 +36,20 @@ data "archive_file" "lambda_zip" {
     output_path = "function.zip"
 }
 
-resource "aws_ssm_parameter" "secret" {
-  name  = "${var.environment}/database/password/master"
+data "aws_ssm_parameter" "secret_read" {
+  name  = "TEST_SECRET"
+}
+
+output "secret_read" {
+  value = "${data.aws_ssm_parameter.secret_read.value}"
+}
+
+resource "aws_ssm_parameter" "secret_write" {
+  name  = "/${var.environment}/secret/test"
   type  = "SecureString"
-  value = "${var.database_master_password}"
+  value = "This is another secret"
+}
+
+output "secret_write" {
+  value = "${aws_ssm_parameter.secret_write.value}"
 }
