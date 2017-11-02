@@ -26,6 +26,11 @@ resource "aws_lambda_function" "lambda_demo" {
     filename = "function.zip"
     source_code_hash = "${data.archive_file.lambda_zip.output_base64sha256}"
     role = "${aws_iam_role.lambda_exec_role.arn}"
+    environment {
+       variables {
+          TEST = "${data.aws_ssm_parameter.secret_read.value}"
+       }
+    }
 }
 
 resource "aws_iam_role" "lambda_exec_role" {
