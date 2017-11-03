@@ -21,6 +21,7 @@ provider "aws" {
 
 resource "aws_lambda_function" "lambda_demo" {
     function_name = "lambda_demo"
+    description = "Lambda Demo with API Gateway"
     handler = "index.handler"
     runtime = "nodejs6.10"
     filename = "function.zip"
@@ -59,8 +60,16 @@ resource "aws_api_gateway_resource" "lambda_demo_api_resource" {
 resource "aws_api_gateway_method" "lambda_demo_api_method" {
   rest_api_id = "${aws_api_gateway_rest_api.lambda_demo_api.id}"
   resource_id = "${aws_api_gateway_resource.lambda_demo_api_resource.id}"
-  http_method = "POST"
+  http_method = "ANY"
   authorization = "NONE"
+}
+
+resource "aws_api_gateway_method_response" "200" {
+  rest_api_id = "${aws_api_gateway_rest_api.lambda_demo_api.id}"
+  resource_id = "${aws_api_gateway_resource.lambda_demo_api_resource.id}"
+  http_method = "${aws_api_gateway_method.lambda_demo_api_method.http_method}"
+  status_code = "200"
+  response_models = { "application/json" = "Empty" }
 }
 
 resource "aws_api_gateway_integration" "lambda_demo_api_method-integration" {
@@ -70,6 +79,27 @@ resource "aws_api_gateway_integration" "lambda_demo_api_method-integration" {
   type = "AWS_PROXY"
   uri = "arn:aws:apigateway:${module.global.region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${module.global.region}:${data.aws_caller_identity.current.account_id}:function:${aws_lambda_function.lambda_demo.function_name}/invocations"
   integration_http_method = "POST"
+}
+
+resource "aws_api_gateway_integration_response" "lambda_demo_api_integration-response" {
+    depends_on = [
+      "aws_api_gateway_method.lambda_demo_api_method",
+      "aws_api_gateway_integration.lambda_demo_api_method-integration"
+    ]
+   rest_api_id = "${aws_api_gateway_rest_api.lambda_demo_api.id}"
+   resource_id = "${aws_api_gateway_resource.lambda_demo_api_resource.id}"
+   http_method = "${aws_api_gateway_method.lambda_demo_api_method.http_method}"
+   status_code = "${aws_api_gateway_method_response.200.status_code}"
+
+   response_templates = { "application/json" = "" }
+}
+
+resource "aws_lambda_permission" "allow_api_gateway" {
+    function_name = "${aws_lambda_function.lambda_demo.function_name}"
+    statement_id = "AllowExecutionFromApiGateway"
+    action = "lambda:InvokeFunction"
+    principal = "apigateway.amazonaws.com"
+    source_arn = "arn:aws:execute-api:${module.global.region}:${data.aws_caller_identity.current.account_id}:${aws_api_gateway_rest_api.lambda_demo_api.id}/*/${aws_api_gateway_method.lambda_demo_api_method.http_method}${aws_api_gateway_resource.lambda_demo_api_resource.path}"
 }
 
 resource "aws_api_gateway_deployment" "lambda_demo_deployment_dev" {

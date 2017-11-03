@@ -8,6 +8,6 @@ exports.handler = function(event, context, callback) {
       body: JSON.stringify({ 'message': 'hello world' }),
       headers: {
         'Content-Type': 'application/json',
-      },
+      }
     });
 };
