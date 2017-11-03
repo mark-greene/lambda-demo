@@ -60,7 +60,7 @@ resource "aws_api_gateway_resource" "lambda_demo_api_resource" {
 resource "aws_api_gateway_method" "lambda_demo_api_method" {
   rest_api_id = "${aws_api_gateway_rest_api.lambda_demo_api.id}"
   resource_id = "${aws_api_gateway_resource.lambda_demo_api_resource.id}"
-  http_method = "ANY"
+  http_method = "GET"
   authorization = "NONE"
 }
 
@@ -109,6 +109,10 @@ resource "aws_api_gateway_deployment" "lambda_demo_deployment_dev" {
   ]
   rest_api_id = "${aws_api_gateway_rest_api.lambda_demo_api.id}"
   stage_name = "dev"
+
+  variables {
+      deployed_at = "${timestamp()}"
+  }
 }
 
 resource "aws_api_gateway_deployment" "lambda_demo_deployment_prod" {
@@ -118,6 +122,48 @@ resource "aws_api_gateway_deployment" "lambda_demo_deployment_prod" {
   ]
   rest_api_id = "${aws_api_gateway_rest_api.lambda_demo_api.id}"
   stage_name = "api"
+
+  variables {
+      deployed_at = "${timestamp()}"
+  }
+}
+
+resource "aws_api_gateway_base_path_mapping" "lambda_demo" {
+  api_id                       = "${aws_api_gateway_rest_api.lambda_demo_api.id}"
+  stage_name                   = "${aws_api_gateway_deployment.lambda_demo_deployment_prod.stage_name}"
+  domain_name                  = "${aws_api_gateway_domain_name.lambda_demo.domain_name}"
+  base_path                    = "${aws_api_gateway_resource.lambda_demo_api_resource.path_part}"
+}
+
+resource "aws_api_gateway_domain_name" "lambda_demo" {
+  domain_name                 = "api.devops.onelxk.co"
+  certificate_arn             = "${data.aws_acm_certificate.lambda_demo.arn}"
+}
+
+provider "aws" {
+  alias = "virginia"
+  region = "us-east-1"
+}
+
+data "aws_acm_certificate" "lambda_demo" {
+  domain   = "devops.onelxk.co"
+  statuses = ["ISSUED"]
+  provider = "aws.virginia"
+}
+
+data "aws_route53_zone" "lambda_demo" {
+  name = "devops.onelxk.co"
+}
+
+resource "aws_route53_record" "lambda_demo" {
+  zone_id                     = "${data.aws_route53_zone.lambda_demo.id}"
+  name                        = "${aws_api_gateway_domain_name.lambda_demo.domain_name}"
+  type                        = "A"
+  alias {
+    name                      = "${aws_api_gateway_domain_name.lambda_demo.cloudfront_domain_name}"
+    zone_id                   = "${aws_api_gateway_domain_name.lambda_demo.cloudfront_zone_id}"
+    evaluate_target_health    = true
+  }
 }
 
 output "dev_url" {
