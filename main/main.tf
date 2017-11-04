@@ -1,4 +1,5 @@
-// Can not use variables
+// Remote State
+
 // terraform.backend: configuration cannot contain interpolations
 terraform {
   required_version = ">= 0.10.0"
@@ -11,12 +12,34 @@ terraform {
   }
 }
 
+// Setup
+
 module "global" {
   source = "../global"
 }
 
 provider "aws" {
     region = "${module.global.region}"
+}
+
+provider "aws" {
+  alias = "virginia"
+  region = "us-east-1"
+}
+
+data "aws_caller_identity" "current" {}
+
+// Lambda
+
+data "archive_file" "lambda_zip" {
+    type        = "zip"
+    source_dir  = "lambda"
+    output_path = "function.zip"
+}
+
+resource "aws_iam_role" "lambda_demo_role" {
+  name = "lambda_demo_role"
+  assume_role_policy = "${file("policies/lambda-role.json")}"
 }
 
 resource "aws_lambda_function" "lambda_demo" {
@@ -35,16 +58,15 @@ resource "aws_lambda_function" "lambda_demo" {
     publish = true
 }
 
-resource "aws_iam_role" "lambda_demo_role" {
-  name = "lambda_demo_role"
-  assume_role_policy = "${file("policies/lambda-role.json")}"
+resource "aws_lambda_permission" "allow_api_gateway" {
+    function_name = "${aws_lambda_function.lambda_demo.function_name}"
+    statement_id = "allow-execution-from-api-gateway"
+    action = "lambda:InvokeFunction"
+    principal = "apigateway.amazonaws.com"
+    source_arn = "arn:aws:execute-api:${module.global.region}:${data.aws_caller_identity.current.account_id}:${aws_api_gateway_rest_api.lambda_demo_api.id}/*/${aws_api_gateway_method.lambda_demo_api_method.http_method}${aws_api_gateway_resource.lambda_demo_api_resource.path}"
 }
 
-data "archive_file" "lambda_zip" {
-    type        = "zip"
-    source_dir  = "lambda"
-    output_path = "function.zip"
-}
+// API Gateway
 
 resource "aws_api_gateway_rest_api" "lambda_demo_api" {
   name = "lambda_demo_api"
@@ -94,14 +116,6 @@ resource "aws_api_gateway_integration_response" "lambda_demo_api_integration-res
    response_templates = { "application/json" = "" }
 }
 
-resource "aws_lambda_permission" "allow_api_gateway" {
-    function_name = "${aws_lambda_function.lambda_demo.function_name}"
-    statement_id = "allow-execution-from-api-gateway"
-    action = "lambda:InvokeFunction"
-    principal = "apigateway.amazonaws.com"
-    source_arn = "arn:aws:execute-api:${module.global.region}:${data.aws_caller_identity.current.account_id}:${aws_api_gateway_rest_api.lambda_demo_api.id}/*/${aws_api_gateway_method.lambda_demo_api_method.http_method}${aws_api_gateway_resource.lambda_demo_api_resource.path}"
-}
-
 resource "aws_api_gateway_deployment" "lambda_demo_deployment_dev" {
   depends_on = [
     "aws_api_gateway_method.lambda_demo_api_method",
@@ -122,10 +136,6 @@ resource "aws_api_gateway_deployment" "lambda_demo_deployment_prod" {
   ]
   rest_api_id = "${aws_api_gateway_rest_api.lambda_demo_api.id}"
   stage_name = "api"
-
-  variables {
-      deployed_at = "${timestamp()}"
-  }
 }
 
 resource "aws_api_gateway_base_path_mapping" "lambda_demo" {
@@ -136,23 +146,20 @@ resource "aws_api_gateway_base_path_mapping" "lambda_demo" {
 }
 
 resource "aws_api_gateway_domain_name" "lambda_demo" {
-  domain_name                 = "api.devops.onelxk.co"
+  domain_name                 = "api.${module.global.custom_domain}"
   certificate_arn             = "${data.aws_acm_certificate.lambda_demo.arn}"
 }
 
-provider "aws" {
-  alias = "virginia"
-  region = "us-east-1"
-}
+// Custom Domain
 
 data "aws_acm_certificate" "lambda_demo" {
-  domain   = "devops.onelxk.co"
+  domain   = "${module.global.custom_domain}"
   statuses = ["ISSUED"]
   provider = "aws.virginia"
 }
 
 data "aws_route53_zone" "lambda_demo" {
-  name = "devops.onelxk.co"
+  name = "${module.global.custom_domain}"
 }
 
 resource "aws_route53_record" "lambda_demo" {
@@ -166,15 +173,7 @@ resource "aws_route53_record" "lambda_demo" {
   }
 }
 
-output "dev_url" {
-  value = "https://${aws_api_gateway_deployment.lambda_demo_deployment_dev.rest_api_id}.execute-api.${module.global.region}.amazonaws.com/${aws_api_gateway_deployment.lambda_demo_deployment_dev.stage_name}"
-}
-
-output "prod_url" {
-  value = "https://${aws_api_gateway_deployment.lambda_demo_deployment_prod.rest_api_id}.execute-api.${module.global.region}.amazonaws.com/${aws_api_gateway_deployment.lambda_demo_deployment_prod.stage_name}"
-}
-
-data "aws_caller_identity" "current" {}
+// Secure Parameters
 
 data "aws_ssm_parameter" "secret_read" {
   name  = "TEST_SECRET"
@@ -184,4 +183,18 @@ resource "aws_ssm_parameter" "secret_write" {
   name  = "/${module.global.environment}/secret/test"
   type  = "SecureString"
   value = "This is another secret"
+}
+
+// Outputs
+
+output "dev_url" {
+  value = "https://${aws_api_gateway_deployment.lambda_demo_deployment_dev.rest_api_id}.execute-api.${module.global.region}.amazonaws.com/${aws_api_gateway_deployment.lambda_demo_deployment_dev.stage_name}"
+}
+
+output "prod_url" {
+  value = "https://${aws_api_gateway_deployment.lambda_demo_deployment_prod.rest_api_id}.execute-api.${module.global.region}.amazonaws.com/${aws_api_gateway_deployment.lambda_demo_deployment_prod.stage_name}"
+}
+
+output "custom_url" {
+  value = "https://${aws_api_gateway_domain_name.lambda_demo.domain_name}/${aws_api_gateway_resource.lambda_demo_api_resource.path_part}"
 }

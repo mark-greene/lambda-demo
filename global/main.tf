@@ -21,3 +21,7 @@ output "state_bucket" {
 output "state_bucket_lock" {
   value = "${var.state_bucket_lock}"
 }
+
+output "custom_domain" {
+  value = "${var.custom_domain}"
+}

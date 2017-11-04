@@ -13,3 +13,7 @@ variable "state_bucket" {
 variable "state_bucket_lock" {
   default = "lambda-demo-terraform-state-lock"
 }
+
+variable "custom_domain" {
+  default = "devops.onelxk.co"
+}
