@@ -26,7 +26,7 @@ resource "aws_lambda_function" "lambda_demo" {
     runtime = "nodejs6.10"
     filename = "function.zip"
     source_code_hash = "${data.archive_file.lambda_zip.output_base64sha256}"
-    role = "${aws_iam_role.lambda_exec_role.arn}"
+    role = "${aws_iam_role.lambda_demo_role.arn}"
     environment {
        variables {
           TEST = "${data.aws_ssm_parameter.secret_read.value}"
@@ -35,8 +35,8 @@ resource "aws_lambda_function" "lambda_demo" {
     publish = true
 }
 
-resource "aws_iam_role" "lambda_exec_role" {
-  name = "lambda_exec_role"
+resource "aws_iam_role" "lambda_demo_role" {
+  name = "lambda_demo_role"
   assume_role_policy = "${file("policies/lambda-role.json")}"
 }
 
@@ -96,7 +96,7 @@ resource "aws_api_gateway_integration_response" "lambda_demo_api_integration-res
 
 resource "aws_lambda_permission" "allow_api_gateway" {
     function_name = "${aws_lambda_function.lambda_demo.function_name}"
-    statement_id = "AllowExecutionFromApiGateway"
+    statement_id = "allow-execution-from-api-gateway"
     action = "lambda:InvokeFunction"
     principal = "apigateway.amazonaws.com"
     source_arn = "arn:aws:execute-api:${module.global.region}:${data.aws_caller_identity.current.account_id}:${aws_api_gateway_rest_api.lambda_demo_api.id}/*/${aws_api_gateway_method.lambda_demo_api_method.http_method}${aws_api_gateway_resource.lambda_demo_api_resource.path}"
@@ -132,7 +132,7 @@ resource "aws_api_gateway_base_path_mapping" "lambda_demo" {
   api_id                       = "${aws_api_gateway_rest_api.lambda_demo_api.id}"
   stage_name                   = "${aws_api_gateway_deployment.lambda_demo_deployment_prod.stage_name}"
   domain_name                  = "${aws_api_gateway_domain_name.lambda_demo.domain_name}"
-  base_path                    = "${aws_api_gateway_resource.lambda_demo_api_resource.path_part}"
+  base_path                    = ""
 }
 
 resource "aws_api_gateway_domain_name" "lambda_demo" {
